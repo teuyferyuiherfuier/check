@@ -386,12 +386,13 @@ async function loadQueue(){
   catch(e){toast(e.status===403?'Reconnecte-toi pour activer la file d’attente.':'File d’attente indisponible.')}
 }
 async function applyQ(){
-  if(!curItem||!curItem.uri||curItem.is_local)return toast('Impossible pendant la lecture d’un titre local.');
-  const list=QL.filter(x=>x.uri&&!x.is_local),skip=QL.length-list.length;
+  if(!curItem||!curItem.uri||curItem.is_local||QL.some(x=>!x.uri||x.is_local))return toast('Impossible avec des titres locaux : rien n’a été modifié.');
+  if(!confirm('Remplacer la lecture par cette liste ? La suite de ta playlist ou de ton album sera perdue.'))return;
+  const list=QL;
   busy=true;
   try{
     await api('PUT','/me/player/play',{uris:[curItem.uri,...list.map(x=>x.uri)],position_ms:Math.round(curPos())});
-    qdirty=false;toast(skip?'Appliqué (titres locaux ignorés : '+skip+')':'Ordre appliqué');
+    qdirty=false;toast('Ordre appliqué');
   }catch(e){toast(e.status===404?'Aucun appareil actif.':e.status===403?'Spotify Premium nécessaire.':'Application impossible.')}
   busy=false;setTimeout(()=>{poll();loadQueue()},600);
 }
@@ -417,7 +418,9 @@ let st;$('#qs').oninput=()=>{clearTimeout(st);st=setTimeout(search,400)};
 const closeQ=()=>{document.body.classList.remove('q','qe');$('#qe').textContent='Modifier'};
 $('#qb').onclick=()=>{if(document.body.classList.contains('q'))return closeQ();document.body.classList.add('q');$('#qs').value='';qdirty?drawQ():loadQueue()};
 $('#qx').onclick=closeQ;
-$('#qe').onclick=()=>{const on=document.body.classList.toggle('qe');$('#qe').textContent=on?'Terminé':'Modifier';drawQ()};
+$('#qe').onclick=()=>{
+  if(!document.body.classList.contains('qe')&&(QL.some(x=>x.is_local||!x.uri)||(curItem&&curItem.is_local))){toast('Spotify ne permet pas de réordonner des titres locaux.');return}
+  const on=document.body.classList.toggle('qe');$('#qe').textContent=on?'Terminé':'Modifier';drawQ()};
 $('#qap').onclick=applyQ;
 $('#qca').onclick=()=>{qdirty=false;loadQueue()};
 
