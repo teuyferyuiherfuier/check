@@ -79,6 +79,21 @@ svg.s{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
 .warn{font-size:13px;color:#ffb36b;line-height:1.4}
 button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.panel{flex:1;min-width:0;align-self:stretch;display:none;flex-direction:column;gap:8px}
+body.q .panel{display:flex}body.q .info{display:none}
+.ph{display:flex;align-items:center;gap:12px}
+#qh{font-weight:700;font-size:16px;flex:none}
+#qs{flex:1;min-width:0;padding:9px 12px;border-radius:10px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:0}
+#qs:focus{border-color:#fff}
+#qlist{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;-webkit-overflow-scrolling:touch}
+.qr{display:flex;align-items:center;gap:12px;padding:6px 8px;border-radius:12px;text-align:left;width:100%;flex:none}
+.qr:active{background:rgba(255,255,255,.12)}
+.qr img{width:44px;height:44px;border-radius:8px;object-fit:cover;background:rgba(255,255,255,.08);flex:none}
+.qt{flex:1;min-width:0;display:flex;flex-direction:column}
+.qt b,.qt i{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:normal}
+.qt b{font-size:15px;font-weight:650}.qt i{font-size:13px;color:rgba(255,255,255,.55)}
+.qr em{font-style:normal;font-size:14px;color:rgba(255,255,255,.55);font-variant-numeric:tabular-nums}
+body.q #qb{color:#fff;background:rgba(255,255,255,.16)}
 #flip{display:none}
 :root{--u:1vh;--w:1vw;--H:100dvh;--pt:env(safe-area-inset-top);--pr:env(safe-area-inset-right);--pb:env(safe-area-inset-bottom);--pl:env(safe-area-inset-left)}
 @media (orientation:portrait){
@@ -104,6 +119,7 @@ button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2
   <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/></symbol>
   <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 3v12.3A3.5 3.5 0 107 18.5V8l10-2v7.3A3.5 3.5 0 1015 16.5V3z"/></symbol>
   <symbol id="i-flip" viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
   <symbol id="i-rot" viewBox="0 0 24 24"><path d="M5 7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2zM12 9v6M9 12h6" transform="rotate(90 12 12)"/></symbol>
 </svg>
 
@@ -111,6 +127,7 @@ button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2
   <aside class="dock">
     <div class="clock" id="clock">--:--</div>
     <div class="btns">
+      <button id="qb" aria-label="File d’attente"><svg class="s"><use href="#i-list"/></svg></button>
       <button id="flip" aria-label="Retourner l’affichage"><svg class="s"><use href="#i-flip"/></svg></button>
       <button id="full" aria-label="Plein écran"><svg class="s"><use href="#i-full"/></svg></button>
       <button id="out" aria-label="Se déconnecter"><svg class="s"><use href="#i-out"/></svg></button>
@@ -140,6 +157,10 @@ button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2
         <button class="tog" id="rep" aria-label="Répéter"><svg class="s"><use href="#i-repeat"/></svg></button>
       </div>
     </div>
+    <div class="panel" id="panel">
+      <div class="ph"><span id="qh">File d’attente</span><input id="qs" placeholder="Chercher un titre à ajouter…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div id="qlist"></div>
+    </div>
   </section>
   <div class="toast" id="toast" role="status"></div>
 </main>
@@ -165,11 +186,11 @@ const mem={};
 const get=k=>{try{return localStorage.getItem(k)}catch{return mem[k]}};
 const set=(k,v)=>{try{localStorage.setItem(k,v)}catch{mem[k]=v}};
 const del=k=>{try{localStorage.removeItem(k)}catch{delete mem[k]}};
-const SCOPES='user-read-playback-state user-modify-playback-state';
+const SCOPES='user-read-playback-state user-modify-playback-state user-read-currently-playing';
 const REDIRECT=location.origin+location.pathname;
 const HOSTED=/^https?:$/.test(location.protocol)&&location.origin!=='null';
 const P={dur:0,pos:0,playing:false,shuffle:false,repeat:'off'};
-let demo=false,stamp=Date.now(),busy=false,curUrl='',timers=[];
+let lastUri='',demo=false,stamp=Date.now(),busy=false,curUrl='',timers=[];
 
 /* ---------- Auth (PKCE) ---------- */
 const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -179,7 +200,7 @@ async function login(){
   if(!HOSTED)return toast('Héberge d’abord la page, puis ouvre son adresse.');
   const id=$('#cid').value.trim();
   if(!id)return toast('Colle ton Client ID d’abord.');
-  set('cid',id);
+  set('cid',id);set('sv','2');
   const ver=rand(64);set('ver',ver);
   const ch=b64u(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ver)));
   location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({
@@ -228,9 +249,12 @@ function art(a,b){
   x.fillStyle='rgba(0,0,0,.25)';x.beginPath();x.arc(110,310,150,0,7);x.fill();
   return k.toDataURL();
 }
+function qi(i){const T=TR[i];M.img[i]=M.img[i]||art(T[4],T[5]);return{name:T[0],artists:[{name:T[1]}],album:{name:T[2],images:[{url:M.img[i]}]},duration_ms:T[3],uri:'demo:'+i}}
 function mock(method,path){
   const now=Date.now();if(M.playing)M.pos+=now-M.t;M.t=now;
   const q=new URLSearchParams(path.split('?')[1]||'');
+  if(path.startsWith('/me/player/queue'))return method==='GET'?{queue:[1,2,3,4].map(k=>qi((M.i+k)%TR.length))}:null;
+  if(path.startsWith('/search')){const v=(q.get('q')||'').toLowerCase();return{tracks:{items:TR.map((_,i)=>qi(i)).filter(x=>(x.name+x.artists[0].name).toLowerCase().includes(v))}}}
   if(method!=='GET'){
     if(path.startsWith('/me/player/pause'))M.playing=false;
     else if(path.startsWith('/me/player/play'))M.playing=true;
@@ -309,6 +333,7 @@ function render(S){
   setCover(url||'off|'+(it.uri||it.name),url,url?[]:offlineAlts(it));
   Object.assign(P,{dur:it.duration_ms,pos:S.progress_ms||0,playing:!!S.is_playing,shuffle:!!S.shuffle_state,repeat:S.repeat_state||'off'});
   stamp=Date.now();paint();
+  if(it.uri!==lastUri){lastUri=it.uri;loadQueue()}
 }
 function tick(){
   const pos=curPos();
@@ -320,6 +345,43 @@ function clock(){$('#clock').textContent=new Date().toLocaleTimeString('fr-FR',{
 let tt;function toast(m){
   if(!document.body.classList.contains('playing')){const w=$('#warn');w.hidden=false;w.textContent=m;return}
   const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),3200)}
+
+/* ---------- File d'attente ---------- */
+function row(it,onTap,tail){
+  const imgs=(it.album&&it.album.images)||it.images||[],u=(imgs[imgs.length-1]||{}).url;
+  const d=document.createElement('button'),im=document.createElement('img'),t=document.createElement('span'),b=document.createElement('b'),i=document.createElement('i'),e=document.createElement('em');
+  d.className='qr';im.alt='';if(u)im.src=u;t.className='qt';
+  b.textContent=it.name;i.textContent=(it.artists||[]).map(x=>x.name).join(', ');t.append(b,i);
+  e.textContent=tail||fmt(it.duration_ms);d.append(im,t,e);d.onclick=onTap;return d;
+}
+async function loadQueue(){
+  if(!document.body.classList.contains('q')||$('#qs').value.trim())return;
+  try{
+    const r=await api('GET','/me/player/queue'),L=$('#qlist'),qs=(r&&r.queue)||[];
+    L.replaceChildren();
+    $('#qh').textContent=qs.length?'File d’attente · '+qs.length:'File d’attente vide';
+    qs.slice(0,50).forEach((it,k)=>L.append(row(it,()=>jump(k,it))));
+  }catch(e){toast(e.status===403?'Reconnecte-toi pour activer la file d’attente.':'File d’attente indisponible.')}
+}
+async function jump(k,it){
+  busy=true;toast('Lecture : '+it.name);
+  try{for(let n=0;n<=k;n++){await api('POST','/me/player/next');await new Promise(r=>setTimeout(r,250))}}
+  catch{toast('Saut impossible.')}
+  busy=false;setTimeout(()=>{poll();loadQueue()},400);
+}
+async function search(){
+  const v=$('#qs').value.trim();if(!v)return loadQueue();
+  try{
+    const r=await api('GET','/search?type=track&limit=10&q='+encodeURIComponent(v)),L=$('#qlist');
+    L.replaceChildren();$('#qh').textContent='Touche pour ajouter';
+    ((r&&r.tracks&&r.tracks.items)||[]).forEach(it=>L.append(row(it,async()=>{
+      try{await api('POST','/me/player/queue?uri='+encodeURIComponent(it.uri));toast('Ajouté : '+it.name)}
+      catch(e){toast(e.status===404?'Aucun appareil actif.':'Ajout impossible.')}
+    },'+')));
+  }catch{toast('Recherche impossible.')}
+}
+let st;$('#qs').oninput=()=>{clearTimeout(st);st=setTimeout(search,400)};
+$('#qb').onclick=()=>{const on=document.body.classList.toggle('q');if(on){$('#qs').value='';loadQueue()}};
 
 /* ---------- Boucle ---------- */
 async function poll(){
@@ -333,7 +395,7 @@ function start(){
 }
 function stop(){timers.forEach(clearInterval);timers=[]}
 function showSetup(){
-  document.body.classList.remove('playing');$('#setup').hidden=false;$('#cid').value=get('cid')||'';
+  document.body.classList.remove('playing','q');$('#setup').hidden=false;$('#cid').value=get('cid')||'';
   const w=$('#warn');
   $('#ru').textContent=HOSTED?REDIRECT:'(visible une fois la page hébergée)';
   if(!HOSTED){w.hidden=false;w.textContent='Cette page est ouverte en aperçu ou depuis un fichier : Spotify ne peut pas t’y reconnecter. Héberge-la en HTTPS (GitHub Pages, Netlify…) puis ouvre son adresse. La démo marche partout.'}
@@ -384,7 +446,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&timers.le
     try{await tokenReq({grant_type:'authorization_code',code:q.get('code'),redirect_uri:REDIRECT,code_verifier:get('ver')})}
     catch{toast('Connexion refusée, réessaie.')}
   }else if(q.get('error')){history.replaceState({},'',REDIRECT);toast('Connexion annulée.')}
-  get('rt')?start():showSetup();
+  if(get('rt')&&get('sv')!=='2')toast('Reconnecte-toi une fois pour activer la file d’attente.');
+  get('rt')&&get('sv')==='2'?start():showSetup();
 })();
 </script>
 </body>
