@@ -94,6 +94,7 @@ body.q .panel{display:flex}body.q .info{display:none}
 .qa button:active{background:rgba(255,255,255,.28)}
 .qbar{display:flex;gap:10px}
 .qbar button{padding:10px 16px;border-radius:12px;background:rgba(255,255,255,.14);font-weight:650}
+.ver{font-size:10px;color:rgba(255,255,255,.3);text-align:right}
 #qap{background:#fff;color:#05070c}
 .qr:active{background:rgba(255,255,255,.12)}
 .qr img{width:44px;height:44px;border-radius:8px;object-fit:cover;background:rgba(255,255,255,.08);flex:none}
@@ -166,8 +167,9 @@ body.q #qb{color:#fff;background:rgba(255,255,255,.16)}
       </div>
     </div>
     <div class="panel" id="panel">
-      <div class="ph"><span id="qh">File d’attente</span><button id="qe">Modifier</button><button id="qx" aria-label="Fermer la file">✕</button><input id="qs" placeholder="Chercher un titre à ajouter…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="ph"><span id="qh">File d’attente</span><button id="qe" hidden>Modifier</button><button id="qx" aria-label="Fermer la file">✕</button><input id="qs" placeholder="Chercher un titre à ajouter…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
       <div id="qlist"></div>
+      <div class="ver">v5</div>
       <div class="qbar" id="qbar" hidden><button id="qap">Appliquer l’ordre</button><button id="qca">Annuler</button></div>
     </div>
   </section>
