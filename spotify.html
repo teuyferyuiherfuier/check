@@ -34,10 +34,11 @@ svg.s{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-l
 .dock button:active{background:rgba(255,255,255,.14)}
 
 .stage{display:flex;align-items:center;gap:clamp(14px,calc(3*var(--w)),48px);padding:var(--pad) clamp(14px,calc(3*var(--w)),44px);min-width:0}
-.cw{flex:none;height:min(calc(var(--H) - 2*var(--pad) - var(--pt) - var(--pb)),calc(38*var(--w)));max-height:440px;
+.cw{position:relative;flex:none;height:min(calc(var(--H) - 2*var(--pad) - var(--pt) - var(--pb)),calc(38*var(--w)));max-height:440px;
   aspect-ratio:1;border-radius:22px;overflow:hidden;background:rgba(255,255,255,.07);
   box-shadow:0 24px 60px rgba(0,0,0,.5);display:grid;place-items:center}
 .cw img{width:100%;height:100%;object-fit:cover;display:block}
+.cw .hint{position:absolute;left:10px;right:10px;bottom:10px;font-size:11px;line-height:1.3;color:rgba(255,255,255,.5);text-align:center;word-break:break-all}
 .cw .note{width:34%;opacity:.35}
 .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:clamp(6px,calc(2*var(--u)),16px)}
 .title{font-size:clamp(22px,calc(7*var(--u)),42px);font-weight:750;line-height:1.08;letter-spacing:-.015em;
@@ -119,6 +120,7 @@ button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2
     <div class="cw">
       <img id="cover" alt="Pochette de l’album" hidden>
       <svg class="note" id="note"><use href="#i-note"/></svg>
+      <div class="hint" id="hint" hidden></div>
     </div>
     <div class="info">
       <div>
@@ -249,15 +251,31 @@ function mock(method,path){
 const fmt=ms=>{const s=Math.max(0,Math.floor(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 const curPos=()=>P.playing?Math.min(P.dur,P.pos+Date.now()-stamp):P.pos;
 
-function setCover(url){
-  if(url===curUrl)return;curUrl=url;
-  const c=$('#cover');
-  if(!url){c.hidden=true;$('#note').hidden=false;document.body.style.setProperty('--c','#1b2a55');return}
-  const im=new Image();im.crossOrigin='anonymous';
-  const show=()=>{if(url!==curUrl)return;c.src=url;c.hidden=false;$('#note').hidden=true};
-  im.onload=()=>{show();tint(im)};
-  im.onerror=show;
-  im.src=url;
+const slug=x=>(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,'et').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+function offlineAlts(it){
+  const ar=it.artists&&it.artists[0]?it.artists[0].name:'',al=it.album?it.album.name:'',t=it.name||'';
+  const names=[slug(ar)&&slug(t)&&slug(ar)+'-'+slug(t),slug(t),ar&&t&&ar+' - '+t,t,slug(al),'default'].filter(Boolean);
+  const out=[];
+  [...new Set(names)].forEach(n=>['jpg','png','webp','jpeg'].forEach(e=>out.push('offline/'+encodeURIComponent(n).replace(/%2F/g,'-')+'.'+e)));
+  return out;
+}
+function setCover(key,url,alts){
+  if(key===curUrl)return;curUrl=key;
+  const c=$('#cover'),h=$('#hint');h.hidden=true;
+  const none=()=>{if(key!==curUrl)return;c.hidden=true;$('#note').hidden=false;document.body.style.setProperty('--c','#1b2a55');
+    if(alts&&alts.length){h.textContent=decodeURIComponent(alts[0]);h.hidden=false}};
+  if(!key)return none();
+  const show=u=>{if(key!==curUrl)return;c.src=u;c.hidden=false;$('#note').hidden=true};
+  const list=[url,...(alts||[])].filter(Boolean);
+  (function next(i){
+    if(key!==curUrl)return;
+    if(i>=list.length)return none();
+    const im=new Image();im.crossOrigin='anonymous';
+    const sp=!!url&&i===0;
+    im.onload=()=>{show(list[i]);tint(im)};
+    im.onerror=()=>sp?show(url):next(i+1);
+    im.src=list[i];
+  })(0);
 }
 function tint(im){
   try{
@@ -280,14 +298,15 @@ function render(S){
   if(!it){
     $('#t').textContent='Rien en lecture';
     $('#a').textContent='Lance un titre dans Spotify, il s’affichera ici.';
-    $('#al').textContent='';setCover('');
+    $('#al').textContent='';setCover('','');
     Object.assign(P,{dur:0,pos:0,playing:false});stamp=Date.now();paint();return;
   }
   const imgs=(it.album||it).images||[];
   $('#t').textContent=it.name;
   $('#a').textContent=it.artists?it.artists.map(x=>x.name).join(', '):(it.show?it.show.name:'');
   $('#al').textContent=it.album?it.album.name:'';
-  setCover((imgs[0]||{}).url||'');
+  const url=(imgs[0]||{}).url||'';
+  setCover(url||'off|'+(it.uri||it.name),url,url?[]:offlineAlts(it));
   Object.assign(P,{dur:it.duration_ms,pos:S.progress_ms||0,playing:!!S.is_playing,shuffle:!!S.shuffle_state,repeat:S.repeat_state||'off'});
   stamp=Date.now();paint();
 }
